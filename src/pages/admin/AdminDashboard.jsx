@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Users, ShieldCheck, AlertTriangle, MessageSquareWarning,
-  TrendingUp, CheckCircle, ChevronRight,
+  TrendingUp, CheckCircle, ChevronRight, Layers, // 👈 Added Layers icon here
 } from 'lucide-react'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
@@ -146,10 +146,18 @@ export default function AdminDashboard() {
         </div>
 
         {/* Quick actions */}
-        <div className="card">
+        <div className="card bg-white p-5 rounded-xl border border-slate-100 shadow-sm">
           <h2 className="font-semibold text-slate-800 mb-4">Quick Actions</h2>
           <div className="space-y-2">
             {[
+              // ⚙️ 1. Added: Manage Categories Action
+              {
+                label: 'Manage Service Categories',
+                sub:   'Add, update, or remove service classifications',
+                path:  '/admin/categories',
+                icon:  <Layers size={18} className="text-emerald-600" />,
+                bg:    'bg-emerald-50',
+              },
               {
                 label: 'Review Verifications',
                 sub:   `${stats.pendingProviderVerifications} pending`,

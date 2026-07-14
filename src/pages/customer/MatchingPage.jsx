@@ -1,52 +1,64 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Star, Briefcase, MapPin, Sparkles } from 'lucide-react'
+import {
+  Search, Star, Briefcase, MapPin, Sparkles,
+  Crown, AlertCircle, ChevronRight,
+} from 'lucide-react'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
-import { matchApi } from '../../api/matchApi'
 import { formatCurrency, renderStars, getInitials } from '../../utils/formatters'
+import api from '../../api/axios'
 import toast from 'react-hot-toast'
 
-// Common problem examples shown as quick-fill chips
 const PROBLEM_EXAMPLES = [
-  'My kitchen drain is blocked and water is pooling',
-  'The ceiling fan is making a loud noise',
-  'Bathroom tap is leaking constantly',
-  'Air conditioner is not cooling properly',
-  'Front door lock is broken and won\'t open',
+  'My kitchen drain has been backing up since yesterday',
+  'The ceiling fan makes a loud grinding noise',
+  'Bathroom tap is dripping constantly',
+  'Air conditioner is not cooling at all',
+  'Front door lock is stuck and won\'t open',
 ]
 
 export default function MatchingPage() {
   const navigate = useNavigate()
 
-  const [problem, setProblem]     = useState('')
-  const [results, setResults]     = useState(null)
+  const [query, setQuery]         = useState('')
+  const [result, setResult]       = useState(null)
+  const [error, setError]         = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
 
   const handleSearch = async (e) => {
     e.preventDefault()
-    if (problem.trim().length < 10) {
-      toast.error('Please describe your problem in at least 10 characters.')
+    const trimmed = query.trim()
+    if (trimmed.length < 5) {
+      toast.error('Please describe your problem in a few words.')
       return
     }
 
     setIsLoading(true)
     setHasSearched(true)
+    setResult(null)
+    setError(null)
 
     try {
-      const { data } = await matchApi.findProviders({ problemDescription: problem })
-      setResults(data)
-    } catch {
-      // Error toast already shown by Axios interceptor
+      const { data } = await api.post('/match/hybrid', { query: trimmed })
+      setResult(data)
+    } catch (err) {
+      // Backend returns 400 for low-confidence queries with a helpful message
+      const msg = err.response?.data?.message
+      setError(msg || 'Search failed. Please try again.')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleExampleClick = (text) => {
-    setProblem(text)
-  }
+  const goToProfile = (providerId, provider) =>
+    navigate(`/providers/${providerId}`, { state: { provider } })
+
+  const bookProvider = (providerId, provider) =>
+    navigate('/customer/bookings/new', {
+      state: { providerProfileId: providerId, provider },
+    })
 
   return (
     <DashboardLayout>
@@ -57,7 +69,7 @@ export default function MatchingPage() {
           Find the Right Professional
         </h1>
         <p className="text-slate-500 text-sm mt-1">
-          Describe your problem in plain words — our AI finds the best match
+          Describe your problem in plain words — AI identifies the service and finds the best match
         </p>
       </div>
 
@@ -68,28 +80,26 @@ export default function MatchingPage() {
             What's the problem?
           </label>
           <textarea
-            value={problem}
-            onChange={(e) => setProblem(e.target.value)}
-            rows={4}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            rows={3}
             placeholder="e.g. My kitchen drain has been backing up since yesterday and water is pooling under the sink..."
             className="input-field resize-none mb-3"
           />
 
           {/* Example chips */}
-          {!problem && (
+          {!query && (
             <div className="mb-4">
-              <p className="text-xs text-slate-400 mb-2">Try an example:</p>
+              <p className="text-xs text-slate-400 mb-2">Quick examples:</p>
               <div className="flex flex-wrap gap-2">
                 {PROBLEM_EXAMPLES.map((ex) => (
                   <button
-                    key={ex}
-                    type="button"
-                    onClick={() => handleExampleClick(ex)}
-                    className="text-xs bg-slate-100 hover:bg-primary-light
-                               hover:text-primary text-slate-600 px-3 py-1.5
-                               rounded-full transition-colors"
+                    key={ex} type="button"
+                    onClick={() => setQuery(ex)}
+                    className="text-xs bg-slate-100 hover:bg-primary-light hover:text-primary
+                               text-slate-600 px-3 py-1.5 rounded-full transition-colors"
                   >
-                    {ex.slice(0, 40)}…
+                    {ex.slice(0, 38)}…
                   </button>
                 ))}
               </div>
@@ -98,19 +108,13 @@ export default function MatchingPage() {
 
           <button
             type="submit"
-            disabled={isLoading || problem.trim().length < 10}
+            disabled={isLoading || query.trim().length < 5}
             className="btn-primary flex items-center justify-center gap-2"
           >
             {isLoading ? (
-              <>
-                <LoadingSpinner size="sm" />
-                <span>AI is finding the best match...</span>
-              </>
+              <><LoadingSpinner size="sm" /><span>Analysing your request…</span></>
             ) : (
-              <>
-                <Search size={17} />
-                <span>Find Best Providers</span>
-              </>
+              <><Search size={17} /><span>Find Best Providers</span></>
             )}
           </button>
         </form>
@@ -118,155 +122,267 @@ export default function MatchingPage() {
 
       {/* Loading state */}
       {isLoading && (
-        <div className="card text-center py-12">
-          <div className="text-4xl mb-4 animate-bounce">🤖</div>
-          <p className="font-semibold text-slate-800 text-lg">Analyzing your request</p>
-          <p className="text-slate-400 text-sm mt-2">
-            Reading provider bios, ratings, and customer reviews...
+        <div className="card text-center py-14">
+          <div className="text-5xl mb-4 animate-pulse">🧠</div>
+          <p className="font-semibold text-slate-800 text-lg">
+            Understanding your problem…
           </p>
+          <p className="text-slate-400 text-sm mt-2">
+            Identifying the service category, then finding the best providers in your area
+          </p>
+        </div>
+      )}
+
+      {/* Low-confidence error state */}
+      {!isLoading && hasSearched && error && (
+        <div className="card border-2 border-orange-200 bg-orange-50">
+          <div className="flex items-start gap-3">
+            <AlertCircle size={22} className="text-orange-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-orange-800">We couldn't understand the request</p>
+              <p className="text-sm text-orange-700 mt-1">{error}</p>
+              <button
+                onClick={() => { setQuery(''); setError(null); setHasSearched(false) }}
+                className="mt-3 text-sm text-orange-600 font-medium hover:underline"
+              >
+                Try again with different words →
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Results */}
-      {!isLoading && results && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="font-semibold text-slate-800">
-                {results.rankedProviders.length} Providers Found
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Evaluated {results.totalProvidersEvaluated} providers in your area
-              </p>
+      {!isLoading && result && (
+        <div className="space-y-5">
+
+          {/* Classification badge */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 bg-primary-light text-primary
+                            px-4 py-2 rounded-full text-sm font-semibold">
+              <Sparkles size={14} />
+              Identified: {result.classifiedCategory}
             </div>
+            <span className="text-xs text-slate-400">
+              {(result.confidenceScore * 100).toFixed(0)}% confidence
+              · {result.totalProvidersFound} provider{result.totalProvidersFound !== 1 ? 's' : ''} found
+              {result.servedFromCache && ' · ⚡ from cache'}
+            </span>
           </div>
 
-          <div className="space-y-4">
-            {results.rankedProviders.map((provider) => (
-              <ProviderResultCard
-                key={provider.providerProfileId}
-                provider={provider}
-                onViewProfile={() =>
-                  navigate(`/providers/${provider.providerProfileId}`, {
-                    state: { provider },
-                  })
-                }
-                onBook={() =>
-                  navigate(`/providers/${provider.providerProfileId}`, {
-                    state: { provider, openBooking: true },
-                  })
-                }
-              />
-            ))}
-          </div>
-        </div>
-      )}
+          {/* ── PREMIUM BANNER — Top pick ────────────────────────── */}
+          {result.aiSuggestedProvider && (
+            <PremiumBanner
+              provider={result.aiSuggestedProvider}
+              onViewProfile={() =>
+                goToProfile(result.aiSuggestedProvider.providerProfileId,
+                            result.aiSuggestedProvider)}
+              onBook={() =>
+                bookProvider(result.aiSuggestedProvider.providerProfileId,
+                             result.aiSuggestedProvider)}
+            />
+          )}
 
-      {/* Empty state — search done but no results */}
-      {!isLoading && hasSearched && results?.rankedProviders?.length === 0 && (
-        <div className="card text-center py-12">
-          <div className="text-4xl mb-3">😕</div>
-          <p className="font-semibold text-slate-700">No providers found in your city</p>
-          <p className="text-sm text-slate-400 mt-1">
-            Make sure your profile city is set correctly, then try again.
-          </p>
+          {/* ── SECONDARY GRID ───────────────────────────────────── */}
+          {result.remainingProviders.length > 0 && (
+            <div>
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                Other providers in your area
+              </h2>
+              <div className="space-y-3">
+                {result.remainingProviders.map((p) => (
+                  <SecondaryCard
+                    key={p.providerProfileId}
+                    provider={p}
+                    onViewProfile={() => goToProfile(p.providerProfileId, p)}
+                    onBook={() => bookProvider(p.providerProfileId, p)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Only one provider found */}
+          {result.remainingProviders.length === 0 && result.aiSuggestedProvider && (
+            <p className="text-sm text-slate-400 text-center py-2">
+              Only one {result.classifiedCategory} provider found in your city right now.
+            </p>
+          )}
         </div>
       )}
     </DashboardLayout>
   )
 }
 
-// ── Provider Result Card ───────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PREMIUM BANNER — Rank 1 provider
+// ─────────────────────────────────────────────────────────────────────────────
 
-function ProviderResultCard({ provider, onViewProfile, onBook }) {
-  const isTopPick = provider.rank === 1
-
+function PremiumBanner({ provider: p, onViewProfile, onBook }) {
   return (
-    <div className={`card relative overflow-hidden transition-shadow hover:shadow-md
-                     ${isTopPick ? 'ring-2 ring-primary' : ''}`}>
+    <div className="relative overflow-hidden rounded-2xl
+                    bg-gradient-to-br from-primary to-blue-700 p-5 text-white shadow-lg">
 
-      {/* Top pick ribbon */}
-      {isTopPick && (
-        <div className="absolute top-0 right-0 bg-primary text-white text-xs
-                        font-bold px-3 py-1 rounded-bl-lg">
-          ✦ Best Match
+      {/* Badge */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-1.5 bg-white/20 rounded-full
+                        px-3 py-1 text-xs font-bold backdrop-blur-sm">
+          <Crown size={13} className="text-yellow-300" />
+          AI Best Match Selection
         </div>
-      )}
+        <span className="text-xs text-white/60">Highest rated in your area</span>
+      </div>
 
       <div className="flex gap-4">
         {/* Avatar */}
-        <div className="flex-shrink-0">
-          <div className="w-14 h-14 rounded-xl bg-primary-light flex items-center
-                          justify-center text-primary font-bold text-lg">
-            {getInitials(provider.businessName)}
-          </div>
+        <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center
+                        justify-center text-white font-bold text-xl flex-shrink-0
+                        backdrop-blur-sm">
+          {getInitials(p.businessName)}
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h3 className="font-semibold text-slate-900">{provider.businessName}</h3>
-              <p className="text-sm text-slate-500">{provider.providerName}</p>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <p className="text-sm font-bold text-slate-800">
-                {formatCurrency(provider.baseHourlyRate)}
-                <span className="text-xs font-normal text-slate-400">/hr</span>
-              </p>
-            </div>
-          </div>
+          <h2 className="text-xl font-bold text-white">{p.businessName}</h2>
+          <p className="text-white/80 text-sm">{p.providerName}</p>
 
-          {/* Rating + jobs */}
-          <div className="flex items-center gap-3 mt-1.5">
-            <span className="text-yellow-500 text-sm">
-              {renderStars(provider.averageRating)}
+          <div className="flex flex-wrap items-center gap-3 mt-2">
+            {/* Stars */}
+            <div className="flex items-center gap-1">
+              <span className="text-yellow-300 text-sm">
+                {'★'.repeat(Math.round(p.averageRating))}
+                {'☆'.repeat(5 - Math.round(p.averageRating))}
+              </span>
+              <span className="text-white/80 text-xs font-semibold">
+                {p.averageRating.toFixed(1)}
+              </span>
+            </div>
+
+            <span className="text-white/70 text-xs flex items-center gap-1">
+              <Briefcase size={11} /> {p.totalJobsCompleted} jobs
             </span>
-            <span className="text-xs text-slate-500">
-              {provider.averageRating?.toFixed(1)} · {provider.totalJobsCompleted} jobs
-            </span>
-            <span className="flex items-center gap-1 text-xs text-slate-400">
-              <MapPin size={11} /> {provider.city}
+
+            <span className="text-white/70 text-xs flex items-center gap-1">
+              <MapPin size={11} /> {p.city}
             </span>
           </div>
 
-          {/* AI explanation tag — the key differentiator for this card */}
-          <div className="mt-2.5 bg-primary-light rounded-lg px-3 py-1.5">
-            <p className="text-xs font-medium text-primary">
-              ✦ {provider.explanationTag}
-            </p>
-          </div>
-
-          {/* AI score bar */}
-          <div className="mt-2 flex items-center gap-2">
-            <div className="flex-1 bg-slate-100 rounded-full h-1.5">
-              <div
-                className="bg-primary h-1.5 rounded-full transition-all"
-                style={{ width: `${(provider.aiScore * 100).toFixed(0)}%` }}
-              />
+          {/* Service tags */}
+          {p.serviceNames?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {p.serviceNames.slice(0, 3).map((s) => (
+                <span key={s}
+                  className="bg-white/15 text-white/90 text-[11px] font-medium
+                             px-2 py-0.5 rounded-full backdrop-blur-sm">
+                  {s}
+                </span>
+              ))}
             </div>
-            <span className="text-xs text-slate-400 flex-shrink-0">
-              {(provider.aiScore * 100).toFixed(0)}% match
-            </span>
-          </div>
+          )}
         </div>
+
+        {/* Rate */}
+        <div className="text-right flex-shrink-0 hidden sm:block">
+          <p className="text-2xl font-bold text-white">
+            {formatCurrency(p.baseHourlyRate)}
+          </p>
+          <p className="text-white/60 text-xs">/hour</p>
+          {p.experienceYears > 0 && (
+            <p className="text-white/60 text-xs mt-1">
+              {p.experienceYears} yr exp.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile rate */}
+      <div className="sm:hidden mt-3">
+        <span className="text-lg font-bold">{formatCurrency(p.baseHourlyRate)}</span>
+        <span className="text-white/60 text-xs">/hr</span>
       </div>
 
       {/* Action buttons */}
       <div className="flex gap-2 mt-4">
         <button
           onClick={onViewProfile}
-          className="flex-1 btn-secondary py-2 text-sm"
+          className="flex-1 bg-white/20 hover:bg-white/30 text-white py-2.5
+                     rounded-xl text-sm font-semibold transition-colors backdrop-blur-sm"
         >
           View Profile
         </button>
         <button
           onClick={onBook}
-          className="flex-1 bg-primary text-white py-2 px-4 rounded-lg text-sm
-                     font-medium hover:bg-primary-dark transition-colors"
+          className="flex-1 bg-white text-primary py-2.5 rounded-xl text-sm
+                     font-bold hover:bg-white/90 transition-colors shadow-md"
         >
           Book Now
         </button>
+      </div>
+
+      {/* Decorative circle */}
+      <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/5
+                      rounded-full pointer-events-none" />
+      <div className="absolute -bottom-8 -left-4 w-24 h-24 bg-white/5
+                      rounded-full pointer-events-none" />
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECONDARY CARD — Rank 2..N providers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SecondaryCard({ provider: p, onViewProfile, onBook }) {
+  return (
+    <div className="card flex items-center gap-4 hover:shadow-md
+                    transition-shadow group">
+      {/* Avatar */}
+      <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center
+                      justify-center text-slate-600 font-bold flex-shrink-0">
+        {getInitials(p.businessName)}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-slate-900 truncate">{p.businessName}</p>
+        <p className="text-xs text-slate-500 truncate">{p.providerName}</p>
+
+        <div className="flex flex-wrap items-center gap-3 mt-1">
+          <span className="text-yellow-400 text-xs">
+            {renderStars(p.averageRating)}
+            <span className="text-slate-500 ml-1">{p.averageRating.toFixed(1)}</span>
+          </span>
+          <span className="text-xs text-slate-400">
+            {p.totalJobsCompleted} jobs
+          </span>
+          <span className="text-xs text-slate-400 flex items-center gap-0.5">
+            <MapPin size={10} /> {p.city}
+          </span>
+        </div>
+      </div>
+
+      {/* Rate + actions */}
+      <div className="text-right flex-shrink-0">
+        <p className="text-sm font-bold text-slate-800">
+          {formatCurrency(p.baseHourlyRate)}
+          <span className="text-xs font-normal text-slate-400">/hr</span>
+        </p>
+        <div className="flex gap-1.5 mt-2">
+          <button
+            onClick={onViewProfile}
+            className="text-xs border border-slate-300 text-slate-600 px-3 py-1.5
+                       rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            Profile
+          </button>
+          <button
+            onClick={onBook}
+            className="text-xs bg-primary text-white px-3 py-1.5 rounded-lg
+                       hover:bg-primary-dark transition-colors font-medium"
+          >
+            Book
+          </button>
+        </div>
       </div>
     </div>
   )

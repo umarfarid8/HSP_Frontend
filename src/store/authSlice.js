@@ -61,17 +61,19 @@ export const registerProvider = createAsyncThunk(
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    user:      savedUser,
-    token:     savedToken,
-    role:      savedUser?.role || null,
+    user: savedUser,
+    token: savedToken,
+    role: savedUser?.role || null,    // 👈 1. FIXED: Restores the role on app load/refresh!
+    isAuthenticated: !!savedToken,
     isLoading: false,
-    error:     null,
+    error: null
   },
   reducers: {
     logout(state) {
-      state.user  = null
+      state.user = null
       state.token = null
-      state.role  = null
+      state.role = null               // 👈 2. FIXED: Clears the role on logout
+      state.isAuthenticated = false
       localStorage.removeItem('hsp_token')
       localStorage.removeItem('hsp_user')
       toast.success('Logged out successfully.')
@@ -81,12 +83,12 @@ const authSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    // Helper: handle the fulfilled state the same way for all auth actions
     const handleAuthSuccess = (state, action) => {
       state.isLoading = false
       state.user      = action.payload
       state.token     = action.payload.token
       state.role      = action.payload.role
+      state.isAuthenticated = true    //  Fixed: Sets true on successful login
       state.error     = null
       localStorage.setItem('hsp_token', action.payload.token)
       localStorage.setItem('hsp_user', JSON.stringify(action.payload))

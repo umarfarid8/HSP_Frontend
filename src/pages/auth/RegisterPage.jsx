@@ -6,11 +6,6 @@ import { registerCustomer, registerProvider } from '../../store/authSlice'
 import { useAuth } from '../../hooks/useAuth'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 
-// Fields shown for each role
-const CUSTOMER_FIELDS = ['fullName', 'email', 'password', 'phoneNumber', 'city', 'address']
-const PROVIDER_FIELDS = ['fullName', 'email', 'password', 'phoneNumber',
-                          'businessName', 'bio', 'cnic', 'city', 'baseHourlyRate']
-
 export default function RegisterPage() {
   const dispatch  = useDispatch()
   const navigate  = useNavigate()
@@ -30,12 +25,41 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
+    // ── 1. Create a clean, role-specific payload ──
+    // This stops ASP.NET from rejecting empty numerical values like baseHourlyRate: ""
+    const payload = role === 'Customer' 
+      ? {
+          fullName: form.fullName,
+          email: form.email,
+          password: form.password,
+          phoneNumber: form.phoneNumber,
+          city: form.city,
+          address: form.address
+        }
+      : {
+          fullName: form.fullName,
+          email: form.email,
+          password: form.password,
+          phoneNumber: form.phoneNumber,
+          city: form.city,
+          businessName: form.businessName,
+          bio: form.bio,
+          cnic: form.cnic,
+          baseHourlyRate: Number(form.baseHourlyRate) || 0,
+          serviceAreaRadiusKm: Number(form.serviceAreaRadiusKm) || 10,
+          latitude: Number(form.latitude) || 0,
+          longitude: Number(form.longitude) || 0
+        };
+
     const action = role === 'Customer' ? registerCustomer : registerProvider
-    const result = await dispatch(action(form))
+    const result = await dispatch(action(payload))
 
     if (action.fulfilled.match(result)) {
       toast.success('Account created! Please verify your email.')
       navigate(role === 'Customer' ? '/customer/dashboard' : '/provider/dashboard')
+    } else {
+      // ── 2. Fixed: Show the exact backend error on the screen ──
+      toast.error(result.payload || 'Registration failed. Please try again.')
     }
   }
 
@@ -45,8 +69,7 @@ export default function RegisterPage() {
 
         {/* Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12
-                          bg-primary rounded-xl mb-4">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-primary rounded-xl mb-4">
             <span className="text-white text-xl">🏠</span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Create an Account</h1>
@@ -127,7 +150,7 @@ export default function RegisterPage() {
               </>
             )}
 
-            <button type="submit" disabled={isLoading} className="btn-primary mt-2">
+            <button type="submit" disabled={isLoading} className="btn-primary mt-2 w-full flex justify-center py-2">
               {isLoading
                 ? <LoadingSpinner size="sm" />
                 : `Create ${role} Account`}
@@ -147,9 +170,7 @@ export default function RegisterPage() {
   )
 }
 
-// Small reusable input component for this page
-function FormField({ label, name, type = 'text', value, onChange,
-                     placeholder, required }) {
+function FormField({ label, name, type = 'text', value, onChange, placeholder, required }) {
   return (
     <div>
       <label className="block text-sm font-medium text-slate-700 mb-1">

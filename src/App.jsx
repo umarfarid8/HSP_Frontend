@@ -31,6 +31,7 @@ import DisputesPage from './pages/admin/DisputesPage'
 import AnalyticsPage from './pages/admin/AnalyticsPage'
 import ModerationPage from './pages/admin/ModerationPage'
 import LogsPage from './pages/admin/LogsPage'
+import CategoriesPage from './pages/admin/CategoriesPage' // 👈 Clean, single import!
 
 export default function App() {
   return (
@@ -95,6 +96,10 @@ export default function App() {
           element={<ProtectedRoute role="Admin"><ModerationPage /></ProtectedRoute>} />
         <Route path="/admin/logs"
           element={<ProtectedRoute role="Admin"><LogsPage /></ProtectedRoute>} />
+        
+        {/* 🛠️ FIXED: Nested securely under Admin-only routes */}
+        <Route path="/admin/categories"
+          element={<ProtectedRoute role="Admin"><CategoriesPage /></ProtectedRoute>} />
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -14,22 +14,34 @@ export default function LoginPage() {
 
   const [form, setForm] = useState({ email: '', password: '' })
 
-  // If already logged in, redirect to the right dashboard
+  // If already logged in, redirect to the correct dashboard
   useEffect(() => {
-    if (isLoggedIn) {
-      const routes = { Customer: '/customer/dashboard', Provider: '/provider/dashboard', Admin: '/admin/dashboard' }
+    if (isLoggedIn && role) {
+      const routes = { 
+        Customer: '/customer/dashboard', 
+        Provider: '/provider/dashboard', 
+        Admin: '/admin/dashboard' 
+      }
       navigate(routes[role] || '/')
     }
   }, [isLoggedIn, role, navigate])
 
-  const handleChange = (e) =>
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
+  // Handles text input state changes
+  const handleChange = (e) => {
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value
+    })
+  }
 
+  // Handle form submission via Redux Thunk
   const handleSubmit = async (e) => {
     e.preventDefault()
     const result = await dispatch(loginUser(form))
     if (loginUser.fulfilled.match(result)) {
       toast.success(`Welcome back, ${result.payload.fullName}!`)
+    } else {
+      toast.error(result.payload || 'Invalid email or password.')
     }
   }
 
@@ -46,8 +58,7 @@ export default function LoginPage() {
 
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12
-                          bg-primary rounded-xl mb-4">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-primary rounded-xl mb-4">
             <span className="text-white text-xl">🏠</span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Home Service Provider</h1>
@@ -88,7 +99,7 @@ export default function LoginPage() {
               />
             </div>
 
-            <button type="submit" disabled={isLoading} className="btn-primary">
+            <button type="submit" disabled={isLoading} className="btn-primary w-full flex justify-center py-2">
               {isLoading ? <LoadingSpinner size="sm" /> : 'Sign In'}
             </button>
           </form>

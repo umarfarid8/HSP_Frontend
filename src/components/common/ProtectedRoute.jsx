@@ -1,19 +1,16 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 
-// Usage:
-// <ProtectedRoute role="Customer"> <CustomerDashboard /> </ProtectedRoute>
-// <ProtectedRoute>                 <AnyLoggedInPage />   </ProtectedRoute>
-
 export default function ProtectedRoute({ children, role }) {
   const { isLoggedIn, role: userRole } = useAuth()
 
+  // 1. If the user is not authenticated at all, redirect to the login page
   if (!isLoggedIn) {
     return <Navigate to="/login" replace />
   }
 
+  // 2. If a specific role is required and the user doesn't possess it, redirect to their home dashboard
   if (role && userRole !== role) {
-    // Logged in but wrong role — redirect to their own dashboard
     const dashboardMap = {
       Customer: '/customer/dashboard',
       Provider: '/provider/dashboard',
@@ -22,5 +19,6 @@ export default function ProtectedRoute({ children, role }) {
     return <Navigate to={dashboardMap[userRole] || '/login'} replace />
   }
 
+  // 3. Otherwise, render the requested page components securely
   return children
 }
