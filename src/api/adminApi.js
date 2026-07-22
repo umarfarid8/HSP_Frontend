@@ -27,4 +27,16 @@ export const adminApi = {
 
   // Logs
   getLogs: (params) => api.get('/admin/logs', { params }),
+
+  // Add these to the existing adminApi object:
+
+// Categories
+getCategories:    ()       => api.get('/admin/categories'),
+createCategory:   (data)   => api.post('/admin/categories', data),
+updateCategory:   (id, data) => api.put(`/admin/categories/${id}`, data),
+toggleCategory:   (id)     => api.patch(`/admin/categories/${id}/toggle`),
+
+// Prompt Templates
+getPromptTemplates:    ()       => api.get('/admin/prompt-templates'),
+updatePromptTemplate:  (id, data) => api.put(`/admin/prompt-templates/${id}`, data),
 }

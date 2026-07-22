@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Edit3, Save, X, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import {
+  Edit3, Save, X, CheckCircle, Clock, AlertCircle, Plus, Trash2
+} from 'lucide-react'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
-import { providerApi } from '../../api/providerApi'
 import { formatCurrency, getInitials, renderStars } from '../../utils/formatters'
 import toast from 'react-hot-toast'
+import { providerApi } from '../../api/providerApi'
+import { serviceCategoryApi } from '../../api/serviceCategoryApi'
 
 const DOCUMENT_TYPES = [
   { value: 0, label: 'CNIC' },
@@ -13,15 +16,15 @@ const DOCUMENT_TYPES = [
 ]
 
 export default function ProviderProfilePage() {
-  const [profile, setProfile]     = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [editMode, setEditMode]   = useState(false)
-  const [form, setForm]           = useState({})
-  const [isSaving, setIsSaving]   = useState(false)
+  const [profile, setProfile]         = useState(null)
+  const [isLoading, setIsLoading]     = useState(true)
+  const [editMode, setEditMode]       = useState(false)
+  const [form, setForm]               = useState({})
+  const [isSaving, setIsSaving]       = useState(false)
 
   // Document upload state
-  const [docType, setDocType]     = useState(0)
-  const [docUrl, setDocUrl]       = useState('')
+  const [docType, setDocType]         = useState(0)
+  const [docUrl, setDocUrl]           = useState('')
   const [isUploading, setIsUploading] = useState(false)
 
   const load = () => {
@@ -314,6 +317,9 @@ export default function ProviderProfilePage() {
           </div>
         </div>
 
+        {/* ── Services Offered Section ────────────────────────────── */}
+        <ServicesSection providerUserId={profile?.userId} />
+
         {/* ── Email verification notice ───────────────────────────── */}
         {!profile.isEmailVerified && (
           <div className="flex items-center gap-3 bg-yellow-50 rounded-xl p-4">
@@ -325,6 +331,199 @@ export default function ProviderProfilePage() {
         )}
       </div>
     </DashboardLayout>
+  )
+}
+
+// ── Services Section Component ─────────────────────────────────────────────────
+function ServicesSection({ providerUserId }) {
+  const [services, setServices]         = useState([])
+  const [allCategories, setAllCategories] = useState([])
+  const [isLoading, setIsLoading]       = useState(true)
+  const [showAddForm, setShowAddForm]   = useState(false)
+  const [form, setForm]                 = useState({
+    serviceCategoryId: '', description: '', hourlyRate: '', yearsOfExperience: 0,
+  })
+  const [isSaving, setIsSaving]         = useState(false)
+  const [removingId, setRemovingId]     = useState(null)
+
+  const loadServices = () => {
+    providerApi.getMyServices()
+      .then(({ data }) => setServices(data || []))
+      .catch(() => {})
+      .finally(() => setIsLoading(false))
+  }
+
+  useEffect(() => {
+    loadServices()
+    serviceCategoryApi.getAll().then(({ data }) => setAllCategories(data || []))
+  }, [])
+
+  // Only show categories the provider hasn't already added
+  const addableCategories = allCategories.filter(
+    (c) => !services.some((s) => s.serviceCategoryId === c.id)
+  )
+
+  const handleAdd = async () => {
+    if (!form.serviceCategoryId || !form.hourlyRate) {
+      toast.error('Please select a category and enter a rate.')
+      return
+    }
+    setIsSaving(true)
+    try {
+      await providerApi.addService({
+        serviceCategoryId: form.serviceCategoryId,
+        description:       form.description.trim(),
+        hourlyRate:        Number(form.hourlyRate),
+        yearsOfExperience: Number(form.yearsOfExperience),
+      })
+      toast.success('Service added!')
+      setShowAddForm(false)
+      setForm({ serviceCategoryId: '', description: '', hourlyRate: '', yearsOfExperience: 0 })
+      loadServices()
+    } catch {}
+    finally { setIsSaving(false) }
+  }
+
+  const handleRemove = async (serviceId, name) => {
+    if (!confirm(`Remove ${name} from your services?`)) return
+    setRemovingId(serviceId)
+    try {
+      await providerApi.removeService(serviceId)
+      toast.success(`${name} removed.`)
+      loadServices()
+    } catch {}
+    finally { setRemovingId(null) }
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-slate-800">My Services</h2>
+        {!showAddForm && addableCategories.length > 0 && (
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-1.5 text-sm text-primary font-medium
+                       hover:underline"
+          >
+            <Plus size={15} /> Add Service
+          </button>
+        )}
+      </div>
+
+      {/* Current services */}
+      {isLoading ? (
+        <div className="flex justify-center py-6"><LoadingSpinner size="sm" /></div>
+      ) : services.length === 0 ? (
+        <p className="text-sm text-slate-400 mb-4 text-center py-4">
+          No services added yet. Add at least one to start receiving bookings.
+        </p>
+      ) : (
+        <div className="space-y-2 mb-4">
+          {services.map((svc) => (
+            <div key={svc.id}
+              className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">{svc.categoryName}</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {formatCurrency(svc.hourlyRate)}/hr
+                  {svc.yearsOfExperience > 0 && ` · ${svc.yearsOfExperience} yr exp`}
+                </p>
+                {svc.description && (
+                  <p className="text-xs text-slate-400 mt-0.5 truncate max-w-xs">
+                    {svc.description}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => handleRemove(svc.id, svc.categoryName)}
+                disabled={removingId === svc.id}
+                className="p-2 text-slate-400 hover:text-danger hover:bg-red-50
+                           rounded-lg transition-colors"
+              >
+                {removingId === svc.id
+                  ? <LoadingSpinner size="sm" />
+                  : <Trash2 size={15} />}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add service form */}
+      {showAddForm && (
+        <div className="border-t border-slate-100 pt-4 space-y-3">
+          <p className="text-sm font-semibold text-slate-700">Add a Service</p>
+
+          <select
+            value={form.serviceCategoryId}
+            onChange={(e) => setForm((p) => ({ ...p, serviceCategoryId: e.target.value }))}
+            className="input-field"
+          >
+            <option value="">Select service category…</option>
+            {addableCategories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">
+                Your Rate (PKR/hr) *
+              </label>
+              <input
+                type="number" min="100"
+                value={form.hourlyRate}
+                onChange={(e) => setForm((p) => ({ ...p, hourlyRate: e.target.value }))}
+                placeholder="1000"
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">
+                Years of Experience
+              </label>
+              <input
+                type="number" min="0" max="50"
+                value={form.yearsOfExperience}
+                onChange={(e) => setForm((p) => ({ ...p, yearsOfExperience: e.target.value }))}
+                className="input-field"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Brief description (optional)
+            </label>
+            <input
+              type="text"
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              placeholder="e.g. Specialise in residential plumbing and drain clearing"
+              className="input-field"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleAdd}
+              disabled={isSaving}
+              className="flex-1 bg-primary text-white py-2.5 rounded-lg text-sm font-medium
+                         hover:bg-primary-dark disabled:opacity-50"
+            >
+              {isSaving ? 'Adding…' : 'Add Service'}
+            </button>
+            <button
+              onClick={() => setShowAddForm(false)}
+              className="flex-1 border border-slate-300 text-slate-600 py-2.5 rounded-lg
+                         text-sm hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import ProtectedRoute from './components/common/ProtectedRoute'
-
+import ChatbotWidget from './components/common/ChatbotWidget'
 // Auth
 import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
@@ -38,7 +38,7 @@ export default function App() {
     <BrowserRouter>
       {/* Global toast notifications — place once at app root */}
       <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
-
+<ChatbotWidget />
       <Routes>
         {/* Public routes */}
         <Route path="/"         element={<Navigate to="/login" replace />} />
