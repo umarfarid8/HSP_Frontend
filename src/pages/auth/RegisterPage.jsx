@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import toast from 'react-hot-toast'
 import { registerCustomer, registerProvider } from '../../store/authSlice'
 import { useAuth } from '../../hooks/useAuth'
+import { serviceCategoryApi } from '../../api/serviceCategoryApi'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 export default function RegisterPage() {
@@ -12,12 +13,26 @@ export default function RegisterPage() {
   const { isLoading } = useAuth()
 
   const [role, setRole] = useState('Customer')
+  const [categories, setCategories] = useState([])
+  const [isFetchingCategories, setIsFetchingCategories] = useState(false)
+
   const [form, setForm] = useState({
     fullName: '', email: '', password: '', phoneNumber: '',
     city: '', address: '', businessName: '', bio: '',
     cnic: '', baseHourlyRate: '', serviceAreaRadiusKm: 10,
-    latitude: 0, longitude: 0,
+    latitude: 0, longitude: 0, serviceCategoryId: ''
   })
+
+  // Fetch active service categories registered by admin when Provider role is selected
+  useEffect(() => {
+    if (role === 'Provider' && categories.length === 0) {
+      setIsFetchingCategories(true)
+      serviceCategoryApi.getAll()
+        .then(({ data }) => setCategories(data || []))
+        .catch(() => toast.error('Failed to load service categories'))
+        .finally(() => setIsFetchingCategories(false))
+    }
+  }, [role, categories.length])
 
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -25,8 +40,12 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    // ── 1. Create a clean, role-specific payload ──
-    // This stops ASP.NET from rejecting empty numerical values like baseHourlyRate: ""
+    if (role === 'Provider' && !form.serviceCategoryId) {
+      toast.error('Please select a primary service category.')
+      return
+    }
+
+    // ── Create a clean, role-specific payload ──
     const payload = role === 'Customer' 
       ? {
           fullName: form.fullName,
@@ -48,7 +67,8 @@ export default function RegisterPage() {
           baseHourlyRate: Number(form.baseHourlyRate) || 0,
           serviceAreaRadiusKm: Number(form.serviceAreaRadiusKm) || 10,
           latitude: Number(form.latitude) || 0,
-          longitude: Number(form.longitude) || 0
+          longitude: Number(form.longitude) || 0,
+          serviceCategoryId: form.serviceCategoryId
         };
 
     const action = role === 'Customer' ? registerCustomer : registerProvider
@@ -58,7 +78,6 @@ export default function RegisterPage() {
       toast.success('Account created! Please verify your email.')
       navigate(role === 'Customer' ? '/customer/dashboard' : '/provider/dashboard')
     } else {
-      // ── 2. Fixed: Show the exact backend error on the screen ──
       toast.error(result.payload || 'Registration failed. Please try again.')
     }
   }
@@ -122,6 +141,32 @@ export default function RegisterPage() {
               <>
                 <FormField label="Business Name" name="businessName"
                   value={form.businessName} onChange={handleChange} required />
+                
+                {/* Service Category Dropdown */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Primary Service Category *
+                  </label>
+                  {isFetchingCategories ? (
+                    <div className="p-2 text-xs text-slate-400">Loading admin-registered services...</div>
+                  ) : (
+                    <select
+                      name="serviceCategoryId"
+                      value={form.serviceCategoryId}
+                      onChange={handleChange}
+                      className="input-field"
+                      required
+                    >
+                      <option value="">-- Select a Service --</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
                     Bio
@@ -136,9 +181,11 @@ export default function RegisterPage() {
                     required
                   />
                 </div>
+
                 <FormField label="CNIC" name="cnic"
                   value={form.cnic} onChange={handleChange}
                   placeholder="12345-1234567-1" required />
+                
                 <FormField label="Base Hourly Rate (PKR)" name="baseHourlyRate"
                   type="number" value={form.baseHourlyRate}
                   onChange={handleChange} required />
